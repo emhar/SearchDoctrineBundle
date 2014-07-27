@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<phpunit bootstrap="./Tests/bootstrap.php"
+		 colors="true"
+		 convertErrorsToExceptions="true"
+		 convertNoticesToExceptions="true"
+		 convertWarningsToExceptions="true">
+	<!-- Test files -->
+	<testsuites>
+		<testsuite name="unit_suite">
+			<directory suffix="Test.php">Tests</directory>
+			<exclude>Tests/Functional</exclude>
+		</testsuite>
+		<testsuite name="functional_suite">
+			<directory suffix="Test.php">Tests/Functional</directory>
+		</testsuite>
+	</testsuites>
+	<!-- Code coverage -->
+	<filter>
+		<whitelist processUncoveredFilesFromWhitelist="true">
+			<directory>./</directory>
+			<exclude>
+				<directory>./Resources</directory>
+				<directory>./Tests</directory>
+				<directory>./vendor</directory>
+			</exclude>
+		</whitelist>
+	</filter>
+</phpunit>
