@@ -28,56 +28,56 @@ class ItemMetaData
 	 *
 	 * @var string
 	 */
-	protected $itemClass;
+	public $itemClass;
 
 	/**
 	 * Entity Classes, indexed by entity identifier
 	 *
 	 * @var string[]
 	 */
-	protected $entityClasses = array();
+	public $entityClasses = array();
 
 	/**
 	 * Entity Labels, indexed by entity identifier
 	 *
 	 * @var string[]
 	 */
-	protected $entityLabels = array();
+	public $entityLabels = array();
 
 	/**
 	 * Hit position in item constructor, indexed by hit identifier
 	 *
 	 * @var int[]
 	 */
-	protected $hitPositions = array();
+	public $hitPositions = array();
 
 	/**
 	 * Hit Label, indexed by hit identifier
 	 *
 	 * @var string[]
 	 */
-	protected $hitLabels;
+	public $hitLabels;
 
 	/**
 	 * Required hit identifiers
 	 *
 	 * @var string[]
 	 */
-	protected $requiredHits = array();
+	public $requiredHits = array();
 
 	/**
 	 * Hit score factors, indexed by hit identifier
 	 *
 	 * @var int[]
 	 */
-	protected $hitScoreFactors;
+	public $hitScoreFactors;
 
 	/**
 	 * Sortable hit identifiers
 	 *
 	 * @var string[]
 	 */
-	protected $sortableHits = array();
+	public $sortableHits = array();
 
 	/**
 	 * Mapping between entities and hits
@@ -92,7 +92,7 @@ class ItemMetaData
 	 * 
 	 * @var array
 	 */
-	protected $entityHitMapping;
+	public $entityHitMapping;
 
 	/**
 	 * Initializes a new View instance that will hold the object-relational

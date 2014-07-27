@@ -19,12 +19,12 @@ class Query
 	/**
 	 * @var string[]
 	 */
-	protected $finalTypes;
+	public $finalTypes;
 
 	/**
 	 * @var ResultSetMapping
 	 */
-	protected $rsm;
+	public $rsm;
 
 	/**
 	 * The database mapping
@@ -49,13 +49,13 @@ class Query
 	 *
 	 * @var array
 	 */
-	protected $databaseMapping = array();
+	public $databaseMapping = array();
 
 	/**
 	 * Score Position in selected columns
 	 * @var int
 	 */
-	protected $scorePos;
+	public $scorePos;
 
 	/**
 	 * Determines which attributes get serialized.
