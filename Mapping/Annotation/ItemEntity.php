@@ -3,13 +3,12 @@
 namespace Emhar\SearchDoctrineBundle\Mapping\Annotation;
 
 /**
- * Hits is an annotation that describe mapping
- * between constructor argument and entity attributes
+ * SubItem is an annotation that link Item and entity
  *
  * @author Emhar
  * @Annotation
  */
-class Hit
+class ItemEntity
 {
 
 	/**
@@ -25,17 +24,7 @@ class Hit
 	/**
 	 * @var string
 	 */
-	private $scoreFactor;
-
-	/**
-	 * @var boolean
-	 */
-	private $sortable;
-
-	/**
-	 * @var array
-	 */
-	private $mapping;
+	private $entityClass;
 
 	/**
 	 * Construct Hit annotation
@@ -58,7 +47,7 @@ class Hit
 
 	/**
 	 * Get hit identifier
-	 * 
+	 *
 	 * @return string
 	 */
 	public function getIdentifier()
@@ -77,32 +66,12 @@ class Hit
 	}
 
 	/**
-	 * Get hit score factor
-	 * 
-	 * @return string
-	 */
-	public function getScoreFactor()
-	{
-		return $this->scoreFactor;
-	}
-
-	/**
-	 * Return true if the hit is sortable
+	 * Get hit label
 	 *
 	 * @return string
 	 */
-	public function getSortable()
+	public function getEntityClass()
 	{
-		return $this->sortable;
-	}
-
-	/**
-	 * Get hit mapping
-	 *
-	 * @return string
-	 */
-	public function getMapping()
-	{
-		return $this->mapping;
+		return $this->entityClass;
 	}
 }

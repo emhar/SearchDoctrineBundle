@@ -2,9 +2,11 @@
 
 namespace Emhar\SearchDoctrineBundle\Query;
 
-use Emhar\SearchDoctrineBundle\Mapping\View;
-use Emhar\SearchDoctrineBundle\Request\Request;
 use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Query\ResultSetMapping;
+use Doctrine\DBAL\Types\Type;
+use Emhar\SearchDoctrineBundle\Mapping\ItemMetaData;
+use Emhar\SearchDoctrineBundle\Request\Request;
 
 /**
  * Query build sql and return result
@@ -15,96 +17,149 @@ class Query
 {
 
 	/**
-	 * @var View
+	 * @var string[]
 	 */
-	protected $view;
+	protected $finalTypes;
 
 	/**
-	 * @var array 
+	 * @var ResultSetMapping
+	 */
+	protected $rsm;
+
+	/**
+	 * The database mapping
+	 *
+	 * <pre>
+	 * array(
+	 * 	array(
+	 * 		'name'	=>	<stringl|alias of table (t1)>,
+	 * 		'entityIdentifier'		=>	<string|table name (customer)>
+	 * 		'hits' => 'array(
+	 * 			<int|contructor position>	=>	<string|column (t1.name AS c1)>
+	 * 		)
+	 * 		'scoreMappings' => 'array(
+	 * 			<int|index>	=>	<string|string converted column (CAST(t1.name AS CHAR) AS c1)>
+	 * 		)
+	 * 		'joins' => 'array(
+	 * 			<int|index>	=>	<string|join clause (LEFT JOIN order j1 on t1.id=j1.customer_id)>
+	 * 		)
+	 * 	)
+	 * )
+	 * </pre>
+	 *
+	 * @var array
 	 */
 	protected $databaseMapping = array();
 
 	/**
-	 * @var EntityManager
+	 * Score Position in selected columns
+	 * @var int
 	 */
-	protected $em;
+	protected $scorePos;
 
 	/**
-	 * Construct Query
+	 * Determines which attributes get serialized.
 	 *
-	 * @param View $view
-	 * @param EntityManager $em
+	 * @return string[] The names of all the attributes that should be serialized.
 	 */
-	public function __construct(View $view, EntityManager $em)
+	public function __sleep()
 	{
-		$this->em = $em;
-		$this->view = $view;
+		// This metadata is always serialized/cached.
+		$serialized = array(
+			'itemClass',
+			'finalTypes',
+			'rsm',
+			'databaseMapping'
+		);
+
+		return $serialized;
+	}
+
+	/**
+	 * Create query from array
+	 *
+	 * @param array $array
+	 * @return \Emhar\SearchDoctrineBundle\Query\Query
+	 */
+	public static function __set_state(array $array)
+	{
+		$query = new Query();
+		foreach($array as $attribute => $value)
+		{
+			$query->$attribute = $value;
+		}
+		return $query;
 	}
 
 	/**
 	 * Get results for request
-	 * 
+	 *
+	 * @param EntityManager $em
 	 * @param Request $request
 	 * @param int $page
+	 * @return array
 	 */
-	public function getResults(Request $request, $page)
+	public function getResults(EntityManager $em, Request $request, $page)
 	{
-		$query = $this->buildResultQuery($request->getSearchText(), $request->getLimit(), $request->getLimit() * ($page - 1));
+		$query = $this->buildResultQuery($em, $request, $page);
 		return $query->getResult();
 	}
 
 	/**
 	 * Get result count for request
 	 *
+	 * @param EntityManager $em
 	 * @param Request $request
+	 * @return int
 	 */
-	public function getCount(Request $request)
+	public function getCount(EntityManager $em, Request $request)
 	{
-		$stmt = $this->buildCountQuery($request->getSearchText());
+		$stmt = $this->buildCountQuery($em, $request);
 		$stmt->execute();
-		return $stmt->fetchColumn();
+		return (int) $stmt->fetchColumn();
 	}
 
 	/**
-	 * @param string $searchText
-	 * @param int $limit
-	 * @param int $offset
+	 * Build result query
+	 *
+	 * @param EntityManager $em
+	 * @param Request $request
+	 * @param int $page
 	 * @return \Doctrine\ORM\NativeQuery
 	 */
-	protected function buildResultQuery($searchText, $limit, $offset)
+	protected function buildResultQuery(EntityManager $em, Request $request, $page)
 	{
-		$searchWords = preg_split('/[^[:alnum:]]+/', $searchText);
-		$searchWordsCount = count($searchWords);
+		$searchWords = preg_split('/[^[:alnum:]]+/', $request->getSearchText());
+		$offset = $request->getLimit() * ($page - 1);
+		$limit = $request->getLimit();
+
 		$selects = array();
-		$hitCount = count($this->view->getOrderedRequiredHitNames());
-		$scoreConstructPos = $this->view->getScoreConstructPos() !== null ? $this->view->getScoreConstructPos() : $hitCount;
-		$typeConstructPos = $this->view->getTypeConstructPos() !== null ? $this->view->getTypeConstructPos() : $hitCount + 1;
-		foreach ($this->view->getDatabaseMapping() as $tableMapping)
+		foreach($this->databaseMapping as $tableMapping)
 		{
-			$scores = $this->buidScore($tableMapping['scoreMappings'], $searchWordsCount);
-			$tableMapping['hits'][$scoreConstructPos] = implode($scores, '+') . ' AS c' . $scoreConstructPos;
-			$tableMapping['hits'][$typeConstructPos] = '\'' . $tableMapping['entityName'] . '\' AS c' . $typeConstructPos;
-
+			$tableMapping['columns'][$this->scorePos] = $this->buildScoreColumn($tableMapping['columns'], count($searchWords));
 			//For constructor parameter order of searchitem
-			ksort($tableMapping['hits']);
+			ksort($tableMapping['columns']);
+			$hitExpressions = $this->buildHitExpressions($tableMapping['columns']);
+			$joinsExpressions = $this->buildJoinExpressions($tableMapping['joins']);
 
-			$selects[] = 'SELECT ' . implode($tableMapping['hits'], ', ') . ' '
-					. 'FROM ' . $tableMapping['name'] . ' '
-					. implode(' ', $tableMapping['joins']) . ' '
-					. 'HAVING c' . $scoreConstructPos . ' <> 0 '
-					. 'ORDER BY c' . $scoreConstructPos . ' DESC '
-					. 'LIMIT ' . ($offset + $limit)
+
+			$selects[] = 'SELECT * FROM (SELECT ' . implode($hitExpressions, ', ') . ' '
+					. 'FROM ' . $tableMapping['table'] . ' ' . $tableMapping['tableAlias'] . ' '
+					. implode(' ', $joinsExpressions) . ' '
+					. 'ORDER BY c' . $this->scorePos . ' DESC '
+					. 'LIMIT ' . ($offset + $limit) . ')'
+					. 'WHERE c' . $this->scorePos . '<>0 '
 			;
 		}
 
-		$bigSelect = '(' . implode($selects, ') UNION (') . ') '
-				. 'ORDER BY c' . $scoreConstructPos . ' DESC '
+		$bigSelect = '' . implode($selects, ' UNION ') . ' '
+				. 'ORDER BY c' . $this->scorePos . ' DESC '
 				. 'LIMIT ' . $limit . ' '
 				. 'OFFSET ' . $offset
 		;
 
-		$query = $this->em->createNativeQuery($bigSelect, $this->view->getRsm());
-		foreach ($searchWords as $key => $searchWord)
+		$query = $em->createNativeQuery($bigSelect, $this->rsm);
+		foreach($searchWords as $key => $searchWord)
 		{
 			$query->setParameter('p' . $key, $searchWord);
 		}
@@ -113,58 +168,226 @@ class Query
 	}
 
 	/**
-	 * @param string $searchText
+	 * Build count query
+	 *
+	 * @param \Doctrine\ORM\EntityManager $em
+	 * @param \Emhar\SearchDoctrineBundle\Request\Request $request
 	 * @return \Doctrine\DBAL\Statement;
 	 */
-	protected function buildCountQuery($searchText)
+	protected function buildCountQuery(EntityManager $em, Request $request)
 	{
-		$searchWords = preg_split('/[^[:alnum:]]+/', $searchText);
-		$searchWordsCount = count($searchWords);
+		$searchWords = preg_split('/[^[:alnum:]]+/', $request->getSearchText());
 		$selects = array();
-		foreach ($this->view->getDatabaseMapping() as $tableMapping)
+		foreach($this->databaseMapping as $tableMapping)
 		{
-			$scores = $this->buidScore($tableMapping['scoreMappings'], $searchWordsCount);
+			$score = $this->buildScoreColumn($tableMapping['columns'], count($searchWords));
+			$joinsExpressions = $this->buildJoinExpressions($tableMapping['joins']);
 
-			$selects[] = 'SELECT count(*) '
-					. 'FROM ' . $tableMapping['name'] . ' '
-					. implode(' ', $tableMapping['joins']) . ' '
-					. 'WHERE ' . implode($scores, '+') . ' <> 0 '
+			$selects[] = 'SELECT COUNT(*) '
+					. 'FROM ' . $tableMapping['table'] . ' ' . $tableMapping['tableAlias'] . ' '
+					. implode(' ', $joinsExpressions) . ' '
+					. 'WHERE ' . $score['expression'] . '<>0 '
 			;
 		}
-
 		$bigSelect = 'SELECT (' . implode(')+(', $selects) . ')';
-
-		$indexedSearchWords = $searchWords;
-		array_walk($indexedSearchWords, function($value, &$key)
+		$stmt = $em->getConnection()->prepare($bigSelect);
+		foreach($searchWords as $key => $searchWord)
 		{
-			$key = ":p" . $key;
-		});
-		$stmt = $this->em->getConnection()->prepare($bigSelect);
-		foreach ($searchWords as $key => $searchWord)
-		{
-			$stmt->bindParam('p' . $key, $searchWord);
+			$stmt->bindValue('p' . $key, $searchWord);
 		}
-
 		return $stmt;
 	}
 
-	protected function buidScore($scoreMappings, $searchWordsCount)
+	/**
+	 * Build score column, with same structure as hit
+	 *
+	 * @param array $columns
+	 * @param type $searchWordsCount
+	 * @return array
+	 */
+	protected function buildScoreColumn(array $columns, $searchWordsCount)
 	{
-		$scores = array();
-		foreach ($scoreMappings as $scoreMapping)
-		{
-			$score = 'IFNULL(' . $scoreMapping['rankFactor'] . '*(LENGTH(' . $scoreMapping['string'] . ')'
-					. '-LENGTH('
-					. str_repeat('REPLACE(', $searchWordsCount)
-					. 'LOWER(' . $scoreMapping['string'] . ')';
-			for ($i = 0; $i < $searchWordsCount; $i++)
-			{
-				$score .= ', LOWER(:p' . $i . '), \'\')';
-			}
-			$score .= ')),0)';
-			$scores[] = $score;
-		}
-		return $scores;
+		$scoreExpression = $this->buildScore($columns, $searchWordsCount);
+		return array(
+			'expression' => $scoreExpression,
+			'type' => Type::INTEGER
+		);
 	}
 
+	/**
+	 * Build score expression
+	 *
+	 * @param array $columns
+	 * @param type $searchWordsCount
+	 * @return string
+	 */
+	protected function buildScore(array $columns, $searchWordsCount)
+	{
+		$scores = array();
+		foreach($columns as $column)
+		{
+			if($column['scoreFactor'] != 0 && isset($column['expression']))
+			{
+				$stringConvertedExpression = $this->convertToString($column['type'], $column['expression']);
+				$score =  $column['scoreFactor'] . '*('
+						. $searchWordsCount . '*LENGTH(IFNULL(' . $stringConvertedExpression . ', \'\'))';
+				for($i = 0; $i < $searchWordsCount; $i++)
+				{
+					$score .= ' - LENGTH(REPLACE(LOWER(IFNULL(' . $stringConvertedExpression . ', \'\')), LOWER(:p' . $i . '), \'\'))';
+				}
+				$score .= ')';
+				$scores[] = $score;
+			}
+		}
+		return '' . implode($scores, '+') . '';
+	}
+
+	protected function buildHitExpressions(array $columns)
+	{
+		$hitExpressions = array();
+		foreach($columns as $key => $column)
+		{
+			if(isset($column['expression']))
+			{
+				if($column['type'] == $this->finalTypes[$key])
+				{
+					$hitExpressions[] = $column['expression'] . ' AS c' . $key;
+				}
+				else
+				{
+					$hitExpressions[] = $this->convertToString($column['type'], $column['expression']) . ' AS c' . $key;
+				}
+			}
+			else
+			{
+				$hitExpressions[] = 'NULL AS c' . $key;
+			}
+		}
+		return $hitExpressions;
+	}
+
+	/**
+	 * Build joins expression
+	 *
+	 * @param array $joins
+	 * @return string
+	 */
+	protected function buildJoinExpressions(array $joins)
+	{
+		$joinExpressions = array();
+		foreach($joins as $joins)
+		{
+			$joinExpressions[] = 'LEFT JOIN ' . $joins['table'] . ' ' . $joins['tableAlias']
+					. ' ON ' . $joins['onClause'];
+		}
+		return $joinExpressions;
+	}
+
+	/**
+	 * Return string string converted column
+	 *
+	 * @param string $type
+	 * @param string $expression
+	 * @return string
+	 */
+	protected function convertToString($type, $expression)
+	{
+		switch($type)
+		{
+			case Type::STRING:
+			case Type::TEXT:
+				return $expression;
+			case Type::BIGINT:
+			case Type::DECIMAL:
+			case Type::FLOAT:
+			case Type::INTEGER:
+			case Type::SMALLINT:
+			case Type::DATE:
+			case Type::DATETIME:
+			case Type::DATETIMETZ:
+			case Type::TIME:
+				return 'CAST(' . $expression . ' AS CHAR)';
+			default :
+				return '\'\'';
+		}
+	}
+
+	/**
+	 * Loads and complete databaseMapping
+	 *
+	 * @param array $databaseMapping
+	 * @param string $itemClass
+	 * @param array $hitPositions
+	 */
+	public function mapDatabase(array $databaseMapping, $itemClass, array $hitPositions)
+	{
+		$this->databaseMapping = $databaseMapping;
+		$this->loadFinalType($hitPositions);
+		$this->loadResultSetMappingAndScorePosition($itemClass, $hitPositions);
+		$this->finalTypes[$this->scorePos] = Type::INTEGER;
+	}
+
+	/**
+	 * Load final type from $this->databaseMapping.
+	 */
+	protected function loadFinalType()
+	{
+		foreach($this->databaseMapping as $entityMapping)
+		{
+			foreach($entityMapping['columns'] as $pos => $column)
+			{
+				if(!isset($this->finalTypes[$pos]))
+				{
+					if(isset($column['type']))
+					{
+						$this->finalTypes[$pos] = $column['type'];
+					}
+					else
+					{
+						$this->finalTypes[$pos] = null;
+					}
+				}
+				elseif(isset($column['type']) && $this->finalTypes[$pos] != $column['type'])
+				{
+					$this->finalTypes[$pos] = Type::STRING;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Loads the ResultSetMapping from $this->finalTypes
+	 * and the score position
+	 *
+	 * @param string $itemClass
+	 * @param array $hitPositions
+	 */
+	public function loadResultSetMappingAndScorePosition($itemClass, array $hitPositions)
+	{
+		$rsm = new ResultSetMapping();
+		foreach($this->finalTypes as $pos => $finalType)
+		{
+			$rsm->addScalarResult('c' . $pos, 'c' . $pos, $finalType !== null ? $finalType : Type::STRING);
+			$rsm->newObjectMappings['c' . $pos] = array(
+				'className' => $itemClass,
+				'objIndex' => 0,
+				'argIndex' => $pos
+			);
+		}
+		if(array_key_exists(ItemMetaData::SCORE, $hitPositions))
+		{
+			$this->scorePos = $hitPositions[ItemMetaData::SCORE];
+			$rsm->addScalarResult('c' . $this->scorePos, 'c' . $this->scorePos, Type::INTEGER);
+			$rsm->newObjectMappings['c' . $this->scorePos] = array(
+				'className' => $itemClass,
+				'objIndex' => 0,
+				'argIndex' => $this->scorePos
+			);
+		}
+		else
+		{
+			$this->scorePos = count($hitPositions);
+		}
+		$this->rsm = $rsm;
+	}
 }

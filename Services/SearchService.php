@@ -7,8 +7,8 @@ use Doctrine\Common\Cache\Cache;
 use Symfony\Component\Form\Form;
 use Symfony\Component\Form\FormFactory;
 use Emhar\SearchDoctrineBundle\Request\RequestType;
-use Emhar\SearchDoctrineBundle\Mapping\ViewFactory;
-use Emhar\SearchDoctrineBundle\Query\Query;
+use Emhar\SearchDoctrineBundle\Mapping\ItemMetaDataFactory;
+use Emhar\SearchDoctrineBundle\Query\QueryFactory;
 use Emhar\SearchDoctrineBundle\Request\Request;
 
 /**
@@ -33,66 +33,73 @@ class SearchService
 	protected $formFactory;
 
 	/**
-	 * @var ViewFactory
+	 * @var ItemMetaDataFactory
 	 */
-	protected $viewFactory;
+	protected $itemMetaDataFactory;
+	protected $queryFactory;
 
 	/**
 	 * Constructor
 	 *
 	 * @param EntityManager $em
-	 * @param Cache $cache
 	 * @param FormFactory $formFactory
+	 * @param Cache $cache
 	 */
-	public function __construct(EntityManager $em, Cache $cache, FormFactory $formFactory)
+	public function __construct(EntityManager $em, FormFactory $formFactory, Cache $cache = null)
 	{
 		$this->em = $em;
 		$this->phpFileCache = $cache;
 		$this->formFactory = $formFactory;
-		$this->viewFactory = new ViewFactory($cache, $em);
+		$this->itemMetaDataFactory = new ItemMetaDataFactory($cache);
+		$this->queryFactory = new QueryFactory($em, $cache);
 	}
 
 	/**
 	 * Get Search form
 	 *
-	 * @param string $viewName
+	 * @param string $itemClass
 	 * @return Form
 	 */
-	public function getForm($viewName, $action)
+	public function getForm($itemClass, $action)
 	{
-		$view = $this->viewFactory->getView($viewName);
-		$form = $this->formFactory->create(new RequestType($view), new Request(), array(
-			'action' => $action));
+		$itemMetaData = $this->itemMetaDataFactory->getItemMetaData($itemClass);
+		$form = $this->formFactory->create(
+				new RequestType($itemMetaData), new Request(), array(
+			'action' => $action,
+			'method' => 'GET'
+				)
+		);
 		return $form;
 	}
 
 	/**
-	 * @param string $viewName
+	 * @param string $itemClass
 	 * @param Form $form
 	 * @param int $page
 	 * @return array
 	 */
-	public function getResults($viewName, Form $form, $page = 1)
+	public function getResults($itemClass, Form $form, $page = 1)
 	{
-		$view = $this->viewFactory->getView($viewName);
-		$query = new Query($view, $this->em);
+		$itemMetaData = $this->itemMetaDataFactory->getItemMetaData($itemClass);
+		$query = $this->queryFactory->getQuery($itemMetaData);
 		$request = $form->getData();
-		$results = $query->getResults($request, $page);
+		$results = $query->getResults($this->em, $request, $page);
 		return $results;
 	}
 
 	/**
-	 * @param string $viewName
+	 * Return page number (begins by 1, not 0)
+	 *
+	 * @param string $itemClass
 	 * @param Form $form
 	 * @return int
 	 */
-	public function getPageCount($viewName, Form $form)
+	public function getPageCount($itemClass, Form $form)
 	{
-		$view = $this->viewFactory->getView($viewName);
-		$query = new Query($view, $this->em);
+		$itemMetaData = $this->itemMetaDataFactory->getItemMetaData($itemClass);
+		$query = $this->queryFactory->getQuery($itemMetaData);
 		$request = $form->getData();
-		$count = ceil($query->getCount($request) / $request->getLimit());
+		$count = ceil($query->getCount($this->em, $request) / $request->getLimit());
 		return $count;
 	}
-
 }

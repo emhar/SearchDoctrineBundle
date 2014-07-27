@@ -22,7 +22,7 @@ class Request
 	 *
 	 * @var int
 	 */
-	protected $limit;
+	protected $limit = 20;
 
 	/**
 	 * Get text which must be search
@@ -67,5 +67,4 @@ class Request
 		$this->limit = $limit;
 		return $this;
 	}
-
 }

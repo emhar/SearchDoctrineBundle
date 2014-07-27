@@ -5,7 +5,7 @@ namespace Emhar\SearchDoctrineBundle\Request;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolverInterface;
-use Emhar\SearchDoctrineBundle\Mapping\View;
+use Emhar\SearchDoctrineBundle\Mapping\ItemMetaData;
 
 /**
  * RequestType.
@@ -16,16 +16,16 @@ class RequestType extends AbstractType
 {
 
 	/**
-	 * @var View
+	 * @var ItemMetaData
 	 */
-	protected $view;
+	protected $itemMetaData;
 
 	/**
-	 * @param View $view
+	 * @param ItemMetaData $itemMetaData
 	 */
-	public function __construct(View $view)
+	public function __construct(ItemMetaData $itemMetaData)
 	{
-		$this->view = $view;
+		$this->itemMetaData = $itemMetaData;
 	}
 
 	/**
@@ -34,8 +34,7 @@ class RequestType extends AbstractType
 	 */
 	public function buildForm(FormBuilderInterface $builder, array $options)
 	{
-		$builder->setMethod("GET")
-				->add('searchText', 'search')
+		$builder->add('searchText', 'search')
 				->add('limit', 'integer', array(
 					'data' => 20
 				))
@@ -61,5 +60,4 @@ class RequestType extends AbstractType
 	{
 		return 'q';
 	}
-
 }

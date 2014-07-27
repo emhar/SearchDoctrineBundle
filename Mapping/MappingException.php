@@ -13,48 +13,59 @@ class MappingException extends \Exception
 	/**
 	 * Return MappingException with invalid type mapping message
 	 *
-	 * @param string $viewName
-	 * @param string $ownerName
-	 * @param string $attibuteName
+	 * @param string $itemClass
+	 * @param string $attributeName
 	 * @param string $type
-	 * @return \self
+	 * @param string $ownerName
+	 * @return MappingException
 	 */
-	public static function invalidMappingType($viewName, $ownerName, $attibuteName, $type)
+	public static function invalidMappingType($itemClass, $attributeName, $type, $ownerName = null)
 	{
-		return new self('The search mapping attribute "' . $attibuteName . '"'
-				. ' of "' . $ownerName . '"'
-				. ' is not a valid "' . $type . '"'
-				. ' in view "' . $viewName . '".'
+		return new self('The mapping attribute "' . $attributeName
+				. (isset($ownerName) ? ' of "' . $ownerName . '"' : '')
+				. ' is not a valid "' . $type . '" in "' . $itemClass . '".'
 		);
 	}
 
 	/**
 	 * Return MappingException with required mapping message
 	 *
-	 * @param string $viewName
+	 * @param string $itemClass
+	 * @param string $attributeName
 	 * @param string $ownerName
-	 * @param string $attibuteName
-	 * @return \self
+	 * @return MappingException
 	 */
-	public static function requiredMapping($viewName, $ownerName, $attibuteName)
+	public static function requiredMapping($itemClass, $attributeName, $ownerName = null)
 	{
-		return new self('The search mapping attribute "' . $attibuteName . '"'
+		return new self('The mapping attribute "' . $attributeName . '"'
 				. (isset($ownerName) ? ' of "' . $ownerName . '"' : '')
-				. ' is required in view "' . $viewName . '".'
+				. ' is required in "' . $itemClass . '".'
 		);
 	}
 
 	/**
-	 * Return MappingException with invalid hit name message
+	 * Return MappingException with invalid hit identifier message
 	 *
-	 * @param string $viewName
-	 * @param string $hitName
-	 * @return \self
+	 * @param string $itemClass
+	 * @param string $hitIdentifier
+	 * @return MappingException
 	 */
-	public function invalidHit($viewName, $hitName)
+	public static function invalidHit($itemClass, $hitIdentifier)
 	{
-		return new self('The search hit "' . $hitName . '"'
-				. 'is not a parameter of "' . $viewName . '" constructor.');
+		return new self('The hit identifier "' . $hitIdentifier . '" is not'
+				. ' a parameter of "' . $itemClass . '" constructor.');
 	}
 
+	/**
+	 * Return MappingException with invalid entity identifier message
+	 *
+	 * @param string $itemClass
+	 * @param string $entityIdentifier
+	 * @return MappingException
+	 */
+	public static function invalidEntity($itemClass, $entityIdentifier)
+	{
+		return new self('The entity identifier "' . $entityIdentifier
+				. '" is not describe by an ItemEntity mapping in "' . $itemClass . '"');
+	}
 }
