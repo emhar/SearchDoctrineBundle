@@ -134,7 +134,7 @@ class Query
 		$limit = $request->getLimit();
 
 		$selects = array();
-		foreach($this->databaseMapping as $tableMapping)
+		foreach($this->databaseMapping as $key => $tableMapping)
 		{
 			$tableMapping['columns'][$this->scorePos] = $this->buildScoreColumn($tableMapping['columns'], count($searchWords));
 			//For constructor parameter order of searchitem
@@ -147,7 +147,7 @@ class Query
 					. 'FROM ' . $tableMapping['table'] . ' ' . $tableMapping['tableAlias'] . ' '
 					. implode(' ', $joinsExpressions) . ' '
 					. 'ORDER BY c' . $this->scorePos . ' DESC '
-					. 'LIMIT ' . ($offset + $limit) . ')'
+					. 'LIMIT ' . ($offset + $limit) . ') AS DT' . $key . ' '
 					. 'WHERE c' . $this->scorePos . '<>0 '
 			;
 		}
@@ -229,7 +229,7 @@ class Query
 			if($column['scoreFactor'] != 0 && isset($column['expression']))
 			{
 				$stringConvertedExpression = $this->convertToString($column['type'], $column['expression']);
-				$score =  $column['scoreFactor'] . '*('
+				$score = $column['scoreFactor'] . '*('
 						. $searchWordsCount . '*LENGTH(IFNULL(' . $stringConvertedExpression . ', \'\'))';
 				for($i = 0; $i < $searchWordsCount; $i++)
 				{
