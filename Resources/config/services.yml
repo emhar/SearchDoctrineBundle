@@ -1,4 +1,4 @@
 services:
   emhar_search_doctrine.search_service:
     class: Emhar\SearchDoctrineBundle\Services\SearchService
-    arguments: ["@doctrine.orm.default_entity_manager", "@doctrine.orm.default_metadata_cache", "@form.factory"]
+    arguments: ["@doctrine.orm.default_entity_manager", "@form.factory", "@doctrine.orm.default_metadata_cache"]
