@@ -6,13 +6,13 @@ Simple way to create a search service in tiny web sites.
 It works without search engine, just with Doctrine ORM.
 Describe your result with a simple PHP class, bind it with annotations to your Doctrine entities.
 
-This Symfony2 Bundle provide a service that generate a search Form, search results and result count.
+This Symfony2 Bundle provide a service that generate a search Form, results and page count.
 Result objects are ordered by score, calculated with requested word weights in hits.
 
 [![Latest Stable Version](https://poser.pugx.org/emhar/search-doctrine-bundle/v/stable.svg)](https://packagist.org/packages/emhar/search-doctrine-bundle)
-[![Total Downloads](https://poser.pugx.org/emhar/search-doctrine-bundle/downloads.svg)](https://packagist.org/packages/emhar/search-doctrine-bundle)
 [![Latest Unstable Version](https://poser.pugx.org/emhar/search-doctrine-bundle/v/unstable.svg)](https://packagist.org/packages/emhar/search-doctrine-bundle)
 [![License](https://poser.pugx.org/emhar/search-doctrine-bundle/license.svg)](https://packagist.org/packages/emhar/search-doctrine-bundle)
+[![Total Downloads](https://poser.pugx.org/emhar/search-doctrine-bundle/downloads.svg)](https://packagist.org/packages/emhar/search-doctrine-bundle)
 [![Build Status](https://travis-ci.org/emhar/SearchDoctrineBundle.svg?branch=master)](https://travis-ci.org/emhar/SearchDoctrineBundle)
 
 ## Installation
@@ -50,7 +50,7 @@ public function registerBundles()
 
 //...
 
-use Emhar\SearchDoctrineBundle\SearchItem\AbstractItem;
+use Emhar\SearchDoctrineBundle\Item\AbstractItem;
 use Emhar\SearchDoctrineBundle\Mapping\Annotation\Hit;
 use Emhar\SearchDoctrineBundle\Mapping\Annotation\ItemEntity;
 
@@ -66,7 +66,7 @@ use Emhar\SearchDoctrineBundle\Mapping\Annotation\ItemEntity;
  *  entityClass="MyBundle\Entity\Album"
  * )
  */
-class Resource extends AbstractItem
+class MyItem extends AbstractItem
 {
 
 	//...
@@ -74,18 +74,17 @@ class Resource extends AbstractItem
 	/**
 	 * Construct Resource
 	 *
-	 * @Hit(name="id", scoreFactor=0, sortable=false, label="ID", mapping={
+	 * @Hit(identifier="id", scoreFactor=0, sortable=false, label="ID", mapping={
 	 * 	"album"="id",
 	 * 	"artist"="id"
 	 * })
-	 * @Hit(name="name", scoreFactor=3, sortable=false, label="Name", mapping={
+	 * @Hit(identifier="name", scoreFactor=3, sortable=false, label="Name", mapping={
 	 * 	"album""name",
 	 * 	"artist""name"
 	 * })
 	 */
 	public function __construct($id, $name, $score, $type)
 	{
-		parent::__construct($type, $score);
 		//...
 	}
 
@@ -100,19 +99,19 @@ use ...\Resource;
 //...
 $searchService = $this->get('emhar_search_doctrine.search_service');
 /* @var $searchService \Emhar\SearchDoctrineBundle\Services\SearchService */
-$form = $searchService->getForm(Resource::getItemClass(), $this->generateUrl('...'));
+$form = $searchService->getForm(MyItem::getClass(), $this->generateUrl('...'));
 $form->handleRequest($this->getRequest());
 if ($form->isValid())
 {
-	$ressources = $searchService->getResults(Resource::getItemClass(), $form, $page);
-	$pageCount = $searchService->getPageCount(Resource::getItemClass(), $form);
+	$items = $searchService->getResults(MyItem::getClass(), $form, $page);
+	$pageCount = $searchService->getPageCount(MyItem::getClass(), $form);
 }
 //...
 ```
 
 > You must provide an action URI to `getForm` method
 
-### SearchItem annotation
+### ItemEntity annotation
 
 ```php
 /**
@@ -133,18 +132,19 @@ if ($form->isValid())
 
 ```php
 /**
- * @Hit(name="id", scoreFactor=0, sortable=false, mapping={
+ * @Hit(identifier="id", scoreFactor=0, sortable=false, label="ID" mapping={
  * 	"album"="id",
  * 	"artist"="id"
  * })
  */
 ```
 
-- **identifier**:			constructor parameter `string` `required`
+- **identifier**:		constructor parameter `string` `required`
 - **scoreFactor**:		hit factor in score `int` `default 1`
-- **sortable**:		boolean, determine if hit is sortable `bool` `default false`, currently not supported
-- **mapping index**:	entity identifier from SearchItem annotation `string`
-- **attributeName**:	entity attribute name `string` `required`
+- **sortable**:			boolean, determine if hit is sortable `bool` `default false`, currently not supported
+- **label**:			label for this hit `string` `required`
+- **mapping key**:		entity identifier from SearchItem annotation `string`
+- **mapping value**:	entity attribute name `string` `required`
 
 ### Several types, string conversion
 
@@ -154,7 +154,7 @@ If a hit has several types depending on the entities, returns depending on type 
 
 ```php
 /**
- * @Hit(name="id", scoreFactor=0, sortable=false, mapping={
+ * @Hit(identifier="id", scoreFactor=0, sortable=false, label="ID", mapping={
  * 	"album"="id",
  * 	"artist"="name"
  * })
@@ -167,11 +167,11 @@ You can omit some entities in the hit definitions, returns null value.
 
 ```php
 /**
- * @Hit(identifier="id", scoreFactor=0, sortable=false, mapping={
+ * @Hit(identifier="id", scoreFactor=0, sortable=false, label="ID", mapping={
  * 	"album"="id",
  * 	"artist"="id"
  * })
- * @Hit(identifier="name", scoreFactor=3, sortable=false, mapping={
+ * @Hit(identifier="name", scoreFactor=3, sortable=false, label="Name", mapping={
  * 	"album"="name"
  * })
  */
@@ -183,7 +183,7 @@ You can chain getters for **n**ToOne relations, implode attribute names by point
 
 ```php
 /**
- * @Hit(name="ownerName", scoreFactor=2, sortable=false, mapping={
+ * @Hit(identifier="ownerName", scoreFactor=2, sortable=false, label="Owner Name", mapping={
  * 	"album"="artist.name",
  * 	"track"="album.artist.name"
  * })
@@ -204,11 +204,11 @@ If you name an item constructor parameter :
 /**
  * Construct Resource
  *
- * @Hit(name="id", scoreFactor=0, sortable=false, label="ID", mapping={
+ * @Hit(identifier="id", scoreFactor=0, sortable=false, label="ID", mapping={
  * 	"album"="id",
  * 	"artist"="id"
  * })
- * @Hit(name="name", scoreFactor=3, sortable=false, label="Name", mapping={
+ * @Hit(identifier="name", scoreFactor=3, sortable=false, label="Name", mapping={
  * 	"album""name",
  * 	"artist""name"
  * })
@@ -227,11 +227,11 @@ Or omit them if you do not need
 /**
  * Construct Resource
  *
- * @Hit(name="id", scoreFactor=0, sortable=false, label="ID", mapping={
+ * @Hit(identifier="id", scoreFactor=0, sortable=false, label="ID", mapping={
  * 	"album"="id",
  * 	"artist"="id"
  * })
- * @Hit(name="name", scoreFactor=3, sortable=false, label="Name", mapping={
+ * @Hit(identifier="name", scoreFactor=3, sortable=false, label="Name", mapping={
  * 	"album""name",
  * 	"artist""name"
  * })

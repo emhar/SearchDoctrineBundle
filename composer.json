@@ -1,7 +1,7 @@
 {
 	"name": "emhar/search-doctrine-bundle",
 	"type": "symfony-bundle",
-	"description": "Emhar SearchDoctrineBundle",
+	"description": "Simple way to create a search service in tiny web sites. It works without search engine, just with Doctrine ORM.",
 	"keywords": ["search", "doctrine", "search engine", "symfony"],
 	"homepage": "https://github.com/emhar/SearchDoctrineBundle",
 	"license": "MIT",
